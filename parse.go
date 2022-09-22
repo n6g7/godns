@@ -84,14 +84,14 @@ func parse(request []byte) DNSMessage {
 	var authority ResourceRecord
 	for k := 0; k < int(nscount); k++ {
 		authority, i = parseResourceRecord(request, i)
-		res.authority = append(res.answers, authority)
+		res.authority = append(res.authority, authority)
 	}
 
 	// Additional
 	var additional ResourceRecord
 	for k := 0; k < int(arcount); k++ {
 		additional, i = parseResourceRecord(request, i)
-		res.additional = append(res.answers, additional)
+		res.additional = append(res.additional, additional)
 	}
 
 	return res
