@@ -23,22 +23,22 @@ func run(iface interfaces.Interface, resolver resolvers.Resolver) {
 	for {
 		context, err := server.GetQuery()
 		if err != nil {
-			log.Fatal("error!")
+			log.Fatal(err)
 		}
 
 		answers, err := resolver.Resolve(context.Query.Question)
 		if err != nil {
-			log.Fatal("No!")
+			log.Fatal(err)
 		}
 		response, err := context.Query.Response()
 		if err != nil {
-			log.Fatal("No!")
+			log.Fatal(err)
 		}
 		response.Answers = answers
 
 		err = server.Respond(context, response)
 		if err != nil {
-			log.Fatal("No!")
+			log.Fatal(err)
 		}
 	}
 }
@@ -72,7 +72,7 @@ func main() {
 	case "forward":
 		resolver = resolvers.NewForwardResolver(net.ParseIP(resolverIP), 53)
 	case "static":
-		resolver = resolvers.NewStaticResolver([]proto.ResourceRecord{
+		resolver = resolvers.NewStaticResolver([]*proto.ResourceRecord{
 			{Name: []string{"test", "example", "com"}, Type: proto.CNAME, Class: proto.IN, Ttl: 600, Rdata: proto.DumpName([]string{"test", "example", "com"})},
 			{Name: []string{"test", "example", "com"}, Type: proto.A, Class: proto.IN, Ttl: 600, Rdata: net.IPv4(1, 2, 3, 4).To4()},
 		})

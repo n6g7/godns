@@ -25,12 +25,12 @@ func (serv *ServerInterface) Start() error {
 	var err error
 	udpaddr, err := net.ResolveUDPAddr("udp4", serv.address)
 	if err != nil {
-		return fmt.Errorf("Cannot resolve server address: %s", serv.address)
+		return fmt.Errorf("Cannot resolve server address %s: %w", serv.address, err)
 	}
 
 	serv.conn, err = net.ListenUDP("udp4", udpaddr)
 	if err != nil {
-		return fmt.Errorf("Cannot listen on %s, already in use?", udpaddr)
+		return fmt.Errorf("Cannot listen on %s, already in use? %w", udpaddr, err)
 	}
 
 	log.Printf("listening on %s", udpaddr)
@@ -47,12 +47,12 @@ func (serv *ServerInterface) Stop() error {
 func (serv *ServerInterface) GetQuery() (*QueryContext, error) {
 	n, caddr, err := serv.conn.ReadFromUDP(serv.buffer)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Cannot read from UDP socket: %w", err)
 	}
 
 	query, err := proto.ParseMessage(serv.buffer[0:n])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Cannot parse upstream response: %w", err)
 	}
 
 	log.Printf("%s -> %v", caddr, query)
@@ -66,7 +66,7 @@ func (serv *ServerInterface) GetQuery() (*QueryContext, error) {
 func (serv *ServerInterface) Respond(context *QueryContext, response *proto.DNSMessage) error {
 	_, err := serv.conn.WriteToUDP(response.Dump(), context.caddr)
 	if err != nil {
-		return err
+		return fmt.Errorf("Error sending response: %w", err)
 	}
 
 	log.Printf("%s <- %v", context.caddr, response)

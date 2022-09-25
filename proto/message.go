@@ -40,9 +40,9 @@ type DNSMessage struct {
 	qdcount uint16
 
 	Question   Question
-	Answers    []ResourceRecord
-	Authority  []ResourceRecord
-	Additional []ResourceRecord
+	Answers    []*ResourceRecord
+	Authority  []*ResourceRecord
+	Additional []*ResourceRecord
 }
 
 type qr uint8
@@ -118,7 +118,7 @@ func (m *DNSMessage) Query(q Question) {
 
 func (m *DNSMessage) Response() (*DNSMessage, error) {
 	if !m.IsQuery() {
-		return nil, errors.New("message is not a query")
+		return nil, errors.New("Cannot respond to a response")
 	}
 
 	var response DNSMessage
@@ -135,7 +135,7 @@ func (m *DNSMessage) Response() (*DNSMessage, error) {
 	response.Question = m.Question
 
 	if opt := m.GetOPTPseudoRR(); opt != nil {
-		response.Additional = append(response.Additional, ResourceRecord{
+		response.Additional = append(response.Additional, &ResourceRecord{
 			Type:           OPT,
 			udpPayloadSize: 1024,
 		})
@@ -156,7 +156,7 @@ func (m *DNSMessage) AddAnswer(name []string, type_ qtype, rdata []byte, ttl uin
 	rr.Ttl = ttl
 	rr.Rdata = rdata
 
-	m.Answers = append(m.Answers, rr)
+	m.Answers = append(m.Answers, &rr)
 }
 
 func (m *DNSMessage) AddAAnswer(name []string, ip net.IP, ttl uint32) {
@@ -170,7 +170,7 @@ func (m *DNSMessage) AddCNAMEAnswer(name []string, labels []string, ttl uint32) 
 func (m *DNSMessage) GetOPTPseudoRR() *ResourceRecord {
 	for i := range m.Additional {
 		if m.Additional[i].Type == OPT {
-			return &m.Additional[i]
+			return m.Additional[i]
 		}
 	}
 	return nil

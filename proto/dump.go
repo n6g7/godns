@@ -15,7 +15,7 @@ func DumpName(labels []string) []byte {
 	return res
 }
 
-func DumpRR(rr ResourceRecord) []byte {
+func DumpRR(rr *ResourceRecord) []byte {
 	var res []byte
 
 	res = append(res, DumpName(rr.Name)...)

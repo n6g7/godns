@@ -2,7 +2,8 @@ package proto
 
 import (
 	"encoding/binary"
-	"log"
+	"errors"
+	"fmt"
 )
 
 type LABEL_TYPE uint16
@@ -19,7 +20,7 @@ const (
 	RESERVED EXTENDED_LABEL_TYPE = 63
 )
 
-func parseName(request []byte, startpos int) ([]string, int) {
+func parseName(request []byte, startpos int) ([]string, int, error) {
 	i := startpos
 	labels := []string{}
 	var nextpos int
@@ -38,7 +39,7 @@ func parseName(request []byte, startpos int) ([]string, int) {
 			extendedLabelType := EXTENDED_LABEL_TYPE(extra)
 			switch extendedLabelType {
 			default:
-				log.Println("We don't support extended label types (yet).")
+				return nil, 0, errors.New("We don't support extended label types (yet).")
 			}
 		case POINTER:
 			offset := binary.BigEndian.Uint16(request[i:i+2]) - POINTER<<(6+8)
@@ -52,13 +53,17 @@ func parseName(request []byte, startpos int) ([]string, int) {
 	if nextpos == 0 {
 		nextpos = i + 1
 	}
-	return labels, nextpos
+	return labels, nextpos, nil
 }
 
-func parseResourceRecord(request []byte, startpos int) (ResourceRecord, int) {
+func parseResourceRecord(request []byte, startpos int) (*ResourceRecord, int, error) {
 	var rr ResourceRecord
+	var err error
 	i := startpos
-	rr.Name, i = parseName(request, i)
+	rr.Name, i, err = parseName(request, i)
+	if err != nil {
+		return nil, 0, fmt.Errorf("Couldn't parse resource record name: %w", err)
+	}
 	rr.Type = qtype(binary.BigEndian.Uint16(request[i : i+2]))
 
 	switch rr.Type {
@@ -76,11 +81,12 @@ func parseResourceRecord(request []byte, startpos int) (ResourceRecord, int) {
 	rdlength := binary.BigEndian.Uint16(request[i+8 : i+10])
 	rr.Rdata = request[i+10 : i+10+int(rdlength)]
 
-	return rr, i + 10 + int(rdlength)
+	return &rr, i + 10 + int(rdlength), nil
 }
 
 func parse(request []byte) (*DNSMessage, error) {
 	var res DNSMessage
+	var err error
 
 	// Headers
 	headers := request[0:12]
@@ -102,29 +108,41 @@ func parse(request []byte) (*DNSMessage, error) {
 
 	// Questions
 	var i int = 12
-	res.Question.Name, i = parseName(request, i)
+	res.Question.Name, i, err = parseName(request, i)
+	if err != nil {
+		return nil, fmt.Errorf("Couldn't parse question name: %w", err)
+	}
 	res.Question.Type = qtype(binary.BigEndian.Uint16(request[i : i+2]))
 	res.Question.Class = class(binary.BigEndian.Uint16(request[i+2 : i+4]))
 	i += 4
 
 	// Answers
-	var answer ResourceRecord
+	var answer *ResourceRecord
 	for k := 0; k < int(ancount); k++ {
-		answer, i = parseResourceRecord(request, i)
+		answer, i, err = parseResourceRecord(request, i)
+		if err != nil {
+			return nil, fmt.Errorf("Couldn't parse answer RR: %w", err)
+		}
 		res.Answers = append(res.Answers, answer)
 	}
 
 	// Authority
-	var authority ResourceRecord
+	var authority *ResourceRecord
 	for k := 0; k < int(nscount); k++ {
-		authority, i = parseResourceRecord(request, i)
+		authority, i, err = parseResourceRecord(request, i)
+		if err != nil {
+			return nil, fmt.Errorf("Couldn't parse authority RR: %w", err)
+		}
 		res.Authority = append(res.Authority, authority)
 	}
 
 	// Additional
-	var additional ResourceRecord
+	var additional *ResourceRecord
 	for k := 0; k < int(arcount); k++ {
-		additional, i = parseResourceRecord(request, i)
+		additional, i, err = parseResourceRecord(request, i)
+		if err != nil {
+			return nil, fmt.Errorf("Couldn't parse additional RR: %w", err)
+		}
 		res.Additional = append(res.Additional, additional)
 	}
 

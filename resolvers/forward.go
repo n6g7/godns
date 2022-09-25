@@ -21,7 +21,7 @@ func NewForwardResolver(ip net.IP, port uint16) *ForwardResolver {
 	}
 }
 
-func (fr *ForwardResolver) Resolve(q proto.Question) ([]proto.ResourceRecord, error) {
+func (fr *ForwardResolver) Resolve(q proto.Question) ([]*proto.ResourceRecord, error) {
 	addr, ok := netip.AddrFromSlice(fr.ip)
 	if !ok {
 		return nil, fmt.Errorf("Invalid forward resolver address: %s", fr.ip)
@@ -29,7 +29,10 @@ func (fr *ForwardResolver) Resolve(q proto.Question) ([]proto.ResourceRecord, er
 
 	addrport := netip.AddrPortFrom(addr, fr.port)
 	udpaddr := net.UDPAddrFromAddrPort(addrport)
-	conn, _ := net.DialUDP("udp4", nil, udpaddr)
+	conn, err := net.DialUDP("udp4", nil, udpaddr)
+	if err != nil {
+		return nil, fmt.Errorf("Couldn't connect to upstream %s: %w", udpaddr, err)
+	}
 	defer conn.Close()
 
 	log.Printf("querying %s", conn.RemoteAddr().String())
@@ -38,13 +41,19 @@ func (fr *ForwardResolver) Resolve(q proto.Question) ([]proto.ResourceRecord, er
 	query.Query(q)
 
 	log.Printf("%s <- %v", udpaddr, query)
-	conn.Write(query.Dump())
+	_, err = conn.Write(query.Dump())
+	if err != nil {
+		return nil, fmt.Errorf("Couldn't send data to upstream (%s): %w", udpaddr, err)
+	}
 
 	buffer := make([]byte, 1024)
-	n, caddr, _ := conn.ReadFromUDP(buffer)
+	n, caddr, err := conn.ReadFromUDP(buffer)
+	if err != nil {
+		return nil, fmt.Errorf("Can't read data from upstream (%s): %w", udpaddr, err)
+	}
 	response, err := proto.ParseMessage(buffer[0:n])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Can't parse upstream message: %w", err)
 	}
 	log.Printf("%s -> %v", caddr, response)
 
