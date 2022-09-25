@@ -13,15 +13,14 @@ import (
 )
 
 func run(iface interfaces.Interface, resolver resolvers.Resolver) {
-	server := interfaces.NewServerInterface(53)
-	err := server.Start()
+	err := iface.Start()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer server.Stop()
+	defer iface.Stop()
 
 	for {
-		context, err := server.GetQuery()
+		context, err := iface.GetQuery()
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -36,7 +35,7 @@ func run(iface interfaces.Interface, resolver resolvers.Resolver) {
 		}
 		response.Answers = answers
 
-		err = server.Respond(context, response)
+		err = iface.Respond(context, response)
 		if err != nil {
 			log.Fatal(err)
 		}
