@@ -20,8 +20,17 @@ func dumpRR(rr ResourceRecord) []byte {
 
 	res = append(res, dumpName(rr.name)...)
 	res = binary.BigEndian.AppendUint16(res, uint16(rr.atype))
-	res = binary.BigEndian.AppendUint16(res, uint16(rr.class))
-	res = binary.BigEndian.AppendUint32(res, rr.ttl)
+
+	switch rr.atype {
+	case OPT:
+		res = binary.BigEndian.AppendUint16(res, uint16(rr.udpPayloadSize))
+		res = append(res, rr.extRCODE)
+		res = append(res, rr.version)
+		res = binary.BigEndian.AppendUint16(res, bool2uint16(rr.d0)<<15+rr.z)
+	default:
+		res = binary.BigEndian.AppendUint16(res, uint16(rr.class))
+		res = binary.BigEndian.AppendUint32(res, rr.ttl)
+	}
 	res = binary.BigEndian.AppendUint16(res, uint16(len(rr.rdata)))
 	res = append(res, rr.rdata...)
 
@@ -42,13 +51,13 @@ func dump(message DNSMessage) []byte {
 	res = binary.BigEndian.AppendUint16(res, message.id)
 
 	var flags uint16
-	flags += uint16(message.qr) << 15
-	flags += uint16(message.opcode) << 11
-	flags += bool2uint16(message.aa) << 10
-	flags += bool2uint16(message.tc) << 9
-	flags += bool2uint16(message.rd) << 8
-	flags += bool2uint16(message.ra) << 7
-	flags += uint16(message.rcode) << 0
+	flags += uint16(message.qr) & 1 << 15
+	flags += uint16(message.opcode) & 15 << 11
+	flags += bool2uint16(message.aa) & 1 << 10
+	flags += bool2uint16(message.tc) & 1 << 9
+	flags += bool2uint16(message.rd) & 1 << 8
+	flags += bool2uint16(message.ra) & 1 << 7
+	flags += uint16(message.rcode) & 7 << 0
 	res = binary.BigEndian.AppendUint16(res, flags)
 
 	res = binary.BigEndian.AppendUint16(res, message.qdcount)

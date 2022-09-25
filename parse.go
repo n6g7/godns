@@ -37,8 +37,19 @@ func parseResourceRecord(request []byte, startpos int) (ResourceRecord, int) {
 	i := startpos
 	rr.name, i = parseName(request, i)
 	rr.atype = QTYPE(binary.BigEndian.Uint16(request[i : i+2]))
-	rr.class = QCLASS(binary.BigEndian.Uint16(request[i+2 : i+4]))
-	rr.ttl = binary.BigEndian.Uint32(request[i+4 : i+8])
+
+	switch rr.atype {
+	case OPT:
+		rr.udpPayloadSize = binary.BigEndian.Uint16(request[i+2 : i+4])
+		rr.extRCODE = uint8(request[i+4])
+		rr.version = uint8(request[i+5])
+		rr.d0 = request[i+6]>>7&1 == 1
+		rr.z = binary.BigEndian.Uint16(request[i+6:i+8]) & (2 ^ 16 - 1)
+	default:
+		rr.class = QCLASS(binary.BigEndian.Uint16(request[i+2 : i+4]))
+		rr.ttl = binary.BigEndian.Uint32(request[i+4 : i+8])
+	}
+
 	rdlength := binary.BigEndian.Uint16(request[i+8 : i+10])
 	rr.rdata = request[i+10 : i+10+int(rdlength)]
 
@@ -92,6 +103,11 @@ func parse(request []byte) DNSMessage {
 	for k := 0; k < int(arcount); k++ {
 		additional, i = parseResourceRecord(request, i)
 		res.additional = append(res.additional, additional)
+	}
+
+	// Update RCODE with OPT extended value
+	if optrr := res.GetOPTPseudoRR(); optrr != nil {
+		res.rcode = RCODE(uint16(res.rcode) + uint16(optrr.extRCODE<<4))
 	}
 
 	return res

@@ -18,6 +18,13 @@ type ResourceRecord struct {
 	class QCLASS
 	ttl   uint32
 	rdata []byte
+
+	// OPT fields
+	udpPayloadSize uint16
+	extRCODE       uint8
+	version        uint8
+	d0             bool
+	z              uint16
 }
 
 type DNSMessage struct {
@@ -38,14 +45,14 @@ type DNSMessage struct {
 	additional []ResourceRecord
 }
 
-type QR uint
+type QR uint8
 
 const (
 	Query    QR = 0
 	Response    = 1
 )
 
-type OPCODE uint
+type OPCODE uint8
 
 const (
 	QUERY  OPCODE = 0
@@ -53,7 +60,7 @@ const (
 	STATUS        = 2
 )
 
-type RCODE uint
+type RCODE uint16
 
 const (
 	NoError        RCODE = 0
@@ -74,6 +81,7 @@ const (
 	PTR         = 12
 	MX          = 15
 	TXT         = 16
+	OPT         = 41
 )
 
 type QCLASS uint16
@@ -125,6 +133,13 @@ func (m *DNSMessage) Response() (*DNSMessage, error) {
 
 	response.question = m.question
 
+	if opt := m.GetOPTPseudoRR(); opt != nil {
+		response.additional = append(response.additional, ResourceRecord{
+			atype:          OPT,
+			udpPayloadSize: 1024,
+		})
+	}
+
 	return &response, nil
 }
 
@@ -149,4 +164,13 @@ func (m *DNSMessage) AddAAnswer(name []string, ip net.IP, ttl uint32) {
 
 func (m *DNSMessage) AddCNAMEAnswer(name []string, labels []string, ttl uint32) {
 	m.AddAnswer(name, CNAME, dumpName(labels), ttl)
+}
+
+func (m *DNSMessage) GetOPTPseudoRR() *ResourceRecord {
+	for i := range m.additional {
+		if m.additional[i].atype == OPT {
+			return &m.additional[i]
+		}
+	}
+	return nil
 }
