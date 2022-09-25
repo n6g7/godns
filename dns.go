@@ -4,40 +4,45 @@ import (
 	"log"
 	"net"
 
-	"github.com/n6g7/godns/proto"
+	"github.com/n6g7/godns/interfaces"
 	"github.com/n6g7/godns/resolvers"
 )
 
-func serv(resolver resolvers.Resolver) {
-	addr, _ := net.ResolveUDPAddr("udp4", ":53")
-	conn, _ := net.ListenUDP("udp4", addr)
-	defer conn.Close()
-	log.Printf("listening on %s", addr)
+func run(iface interfaces.Interface, resolver resolvers.Resolver) {
+	server := interfaces.NewServerInterface(53)
+	err := server.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer server.Stop()
 
-	buffer := make([]byte, 1024)
 	for {
-		n, caddr, _ := conn.ReadFromUDP(buffer)
-		rawQuery := buffer[0:n]
-
-		query, err := proto.ParseMessage(rawQuery)
+		context, err := server.GetQuery()
 		if err != nil {
-			log.Fatal("deal with this later")
+			log.Fatal("error!")
 		}
-		log.Printf("%s -> %v", caddr, query)
 
-		answers, err := resolver.Resolve(query.Question)
-
-		response, err := query.Response()
+		answers, err := resolver.Resolve(context.Query.Question)
+		if err != nil {
+			log.Fatal("No!")
+		}
+		response, err := context.Query.Response()
+		if err != nil {
+			log.Fatal("No!")
+		}
 		response.Answers = answers
 
-		rawResponse := response.Dump()
-		conn.WriteToUDP(rawResponse, caddr)
-		log.Printf("%s <- %v", caddr, response)
+		err = server.Respond(context, response)
+		if err != nil {
+			log.Fatal("No!")
+		}
 	}
 }
 
 func main() {
 	log.Println("godns")
+
+	iface := interfaces.NewServerInterface(53)
 
 	resolver := resolvers.NewForwardResolver(net.IPv4(1, 1, 1, 1), 53)
 	// resolver := resolvers.NewStaticResolver([]proto.ResourceRecord{
@@ -45,5 +50,5 @@ func main() {
 	// 	{Name: []string{"test", "example", "com"}, Type: proto.A, Class: proto.IN, Ttl: 600, Rdata: net.IPv4(1, 2, 3, 4).To4()},
 	// })
 
-	serv(resolver)
+	run(iface, resolver)
 }
