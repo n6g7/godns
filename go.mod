@@ -1,3 +1,3 @@
-module godns
+module github.com/n6g7/godns
 
-go 1.17
+go 1.19

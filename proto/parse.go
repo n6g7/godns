@@ -1,7 +1,22 @@
-package main
+package proto
 
 import (
 	"encoding/binary"
+	"log"
+)
+
+type LABEL_TYPE uint16
+
+const (
+	NORMAL   LABEL_TYPE = 0
+	EXTENDED            = 1
+	POINTER             = 3
+)
+
+type EXTENDED_LABEL_TYPE uint16
+
+const (
+	RESERVED EXTENDED_LABEL_TYPE = 63
 )
 
 func parseName(request []byte, startpos int) ([]string, int) {
@@ -10,20 +25,28 @@ func parseName(request []byte, startpos int) ([]string, int) {
 	var nextpos int
 
 	for request[i] != 0 {
-		// Pointer
-		if request[i]>>6 == 3 {
-			offset := binary.BigEndian.Uint16(request[i:i+2]) - 3<<(6+8)
+		label_type := LABEL_TYPE(request[i] >> 6)
+		extra := request[i] & 63
+
+		switch label_type {
+		case NORMAL:
+			length := int(extra)
+			label := request[i+1 : i+length+1]
+			labels = append(labels, string(label))
+			i += length + 1
+		case EXTENDED:
+			extendedLabelType := EXTENDED_LABEL_TYPE(extra)
+			switch extendedLabelType {
+			default:
+				log.Println("We don't support extended label types (yet).")
+			}
+		case POINTER:
+			offset := binary.BigEndian.Uint16(request[i:i+2]) - POINTER<<(6+8)
 			if nextpos == 0 {
 				nextpos = i + 2
 			}
 			i = int(offset)
-			continue
 		}
-
-		l := int(request[i])
-		label := request[i+1 : i+l+1]
-		labels = append(labels, string(label))
-		i += l + 1
 	}
 
 	if nextpos == 0 {
@@ -35,10 +58,10 @@ func parseName(request []byte, startpos int) ([]string, int) {
 func parseResourceRecord(request []byte, startpos int) (ResourceRecord, int) {
 	var rr ResourceRecord
 	i := startpos
-	rr.name, i = parseName(request, i)
-	rr.atype = QTYPE(binary.BigEndian.Uint16(request[i : i+2]))
+	rr.Name, i = parseName(request, i)
+	rr.Type = qtype(binary.BigEndian.Uint16(request[i : i+2]))
 
-	switch rr.atype {
+	switch rr.Type {
 	case OPT:
 		rr.udpPayloadSize = binary.BigEndian.Uint16(request[i+2 : i+4])
 		rr.extRCODE = uint8(request[i+4])
@@ -46,31 +69,31 @@ func parseResourceRecord(request []byte, startpos int) (ResourceRecord, int) {
 		rr.d0 = request[i+6]>>7&1 == 1
 		rr.z = binary.BigEndian.Uint16(request[i+6:i+8]) & (2 ^ 16 - 1)
 	default:
-		rr.class = QCLASS(binary.BigEndian.Uint16(request[i+2 : i+4]))
-		rr.ttl = binary.BigEndian.Uint32(request[i+4 : i+8])
+		rr.Class = class(binary.BigEndian.Uint16(request[i+2 : i+4]))
+		rr.Ttl = binary.BigEndian.Uint32(request[i+4 : i+8])
 	}
 
 	rdlength := binary.BigEndian.Uint16(request[i+8 : i+10])
-	rr.rdata = request[i+10 : i+10+int(rdlength)]
+	rr.Rdata = request[i+10 : i+10+int(rdlength)]
 
 	return rr, i + 10 + int(rdlength)
 }
 
-func parse(request []byte) DNSMessage {
+func parse(request []byte) (*DNSMessage, error) {
 	var res DNSMessage
 
 	// Headers
 	headers := request[0:12]
 	res.id = binary.BigEndian.Uint16(headers[0:2])
 	flags := headers[2:4]
-	res.qr = QR(flags[0] >> 7 & 1)
-	res.opcode = OPCODE(flags[0] >> 3 & 15)
+	res.qr = qr(flags[0] >> 7 & 1)
+	res.opcode = opcode(flags[0] >> 3 & 15)
 	res.aa = flags[0]>>2&1 == 1
 	res.tc = flags[0]>>1&1 == 1
 	res.rd = flags[0]>>0&1 == 1
 	res.ra = flags[1]>>7&1 == 1
 	// z (bits 9-11 of the flags bytes) is ignored
-	res.rcode = RCODE(flags[1] >> 0 & 15)
+	res.rcode = rcode(flags[1] >> 0 & 15)
 
 	res.qdcount = binary.BigEndian.Uint16(headers[4:6])
 	ancount := binary.BigEndian.Uint16(headers[6:8])
@@ -79,36 +102,36 @@ func parse(request []byte) DNSMessage {
 
 	// Questions
 	var i int = 12
-	res.question.name, i = parseName(request, i)
-	res.question.qtype = QTYPE(binary.BigEndian.Uint16(request[i : i+2]))
-	res.question.class = QCLASS(binary.BigEndian.Uint16(request[i+2 : i+4]))
+	res.Question.Name, i = parseName(request, i)
+	res.Question.Type = qtype(binary.BigEndian.Uint16(request[i : i+2]))
+	res.Question.Class = class(binary.BigEndian.Uint16(request[i+2 : i+4]))
 	i += 4
 
 	// Answers
 	var answer ResourceRecord
 	for k := 0; k < int(ancount); k++ {
 		answer, i = parseResourceRecord(request, i)
-		res.answers = append(res.answers, answer)
+		res.Answers = append(res.Answers, answer)
 	}
 
 	// Authority
 	var authority ResourceRecord
 	for k := 0; k < int(nscount); k++ {
 		authority, i = parseResourceRecord(request, i)
-		res.authority = append(res.authority, authority)
+		res.Authority = append(res.Authority, authority)
 	}
 
 	// Additional
 	var additional ResourceRecord
 	for k := 0; k < int(arcount); k++ {
 		additional, i = parseResourceRecord(request, i)
-		res.additional = append(res.additional, additional)
+		res.Additional = append(res.Additional, additional)
 	}
 
 	// Update RCODE with OPT extended value
 	if optrr := res.GetOPTPseudoRR(); optrr != nil {
-		res.rcode = RCODE(uint16(res.rcode) + uint16(optrr.extRCODE<<4))
+		res.rcode = rcode(uint16(res.rcode) + uint16(optrr.extRCODE<<4))
 	}
 
-	return res
+	return &res, nil
 }

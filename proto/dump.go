@@ -1,8 +1,8 @@
-package main
+package proto
 
 import "encoding/binary"
 
-func dumpName(labels []string) []byte {
+func DumpName(labels []string) []byte {
 	var res []byte
 
 	for i := range labels {
@@ -15,24 +15,24 @@ func dumpName(labels []string) []byte {
 	return res
 }
 
-func dumpRR(rr ResourceRecord) []byte {
+func DumpRR(rr ResourceRecord) []byte {
 	var res []byte
 
-	res = append(res, dumpName(rr.name)...)
-	res = binary.BigEndian.AppendUint16(res, uint16(rr.atype))
+	res = append(res, DumpName(rr.Name)...)
+	res = binary.BigEndian.AppendUint16(res, uint16(rr.Type))
 
-	switch rr.atype {
+	switch rr.Type {
 	case OPT:
 		res = binary.BigEndian.AppendUint16(res, uint16(rr.udpPayloadSize))
 		res = append(res, rr.extRCODE)
 		res = append(res, rr.version)
 		res = binary.BigEndian.AppendUint16(res, bool2uint16(rr.d0)<<15+rr.z)
 	default:
-		res = binary.BigEndian.AppendUint16(res, uint16(rr.class))
-		res = binary.BigEndian.AppendUint32(res, rr.ttl)
+		res = binary.BigEndian.AppendUint16(res, uint16(rr.Class))
+		res = binary.BigEndian.AppendUint32(res, rr.Ttl)
 	}
-	res = binary.BigEndian.AppendUint16(res, uint16(len(rr.rdata)))
-	res = append(res, rr.rdata...)
+	res = binary.BigEndian.AppendUint16(res, uint16(len(rr.Rdata)))
+	res = append(res, rr.Rdata...)
 
 	return res
 }
@@ -61,24 +61,24 @@ func dump(message DNSMessage) []byte {
 	res = binary.BigEndian.AppendUint16(res, flags)
 
 	res = binary.BigEndian.AppendUint16(res, message.qdcount)
-	res = binary.BigEndian.AppendUint16(res, uint16(len(message.answers)))
-	res = binary.BigEndian.AppendUint16(res, uint16(len(message.authority)))
-	res = binary.BigEndian.AppendUint16(res, uint16(len(message.additional)))
+	res = binary.BigEndian.AppendUint16(res, uint16(len(message.Answers)))
+	res = binary.BigEndian.AppendUint16(res, uint16(len(message.Authority)))
+	res = binary.BigEndian.AppendUint16(res, uint16(len(message.Additional)))
 
-	res = append(res, dumpName(message.question.name)...)
-	res = binary.BigEndian.AppendUint16(res, uint16(message.question.qtype))
-	res = binary.BigEndian.AppendUint16(res, uint16(message.question.class))
+	res = append(res, DumpName(message.Question.Name)...)
+	res = binary.BigEndian.AppendUint16(res, uint16(message.Question.Type))
+	res = binary.BigEndian.AppendUint16(res, uint16(message.Question.Class))
 
-	for i := range message.answers {
-		res = append(res, dumpRR(message.answers[i])...)
+	for i := range message.Answers {
+		res = append(res, DumpRR(message.Answers[i])...)
 	}
 
-	for i := range message.authority {
-		res = append(res, dumpRR(message.authority[i])...)
+	for i := range message.Authority {
+		res = append(res, DumpRR(message.Authority[i])...)
 	}
 
-	for i := range message.additional {
-		res = append(res, dumpRR(message.additional[i])...)
+	for i := range message.Additional {
+		res = append(res, DumpRR(message.Additional[i])...)
 	}
 
 	return res
