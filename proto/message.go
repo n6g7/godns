@@ -19,6 +19,10 @@ type ResourceRecord struct {
 	Ttl   uint32
 	Rdata []byte
 
+	// Parsed Rdata
+	IPTarget     net.IP
+	DomainTarget []string
+
 	// OPT fields
 	udpPayloadSize uint16
 	extRCODE       uint8

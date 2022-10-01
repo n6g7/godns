@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"net"
 )
 
 type LABEL_TYPE uint16
@@ -81,7 +82,19 @@ func parseResourceRecord(request []byte, startpos int) (*ResourceRecord, int, er
 	rdlength := binary.BigEndian.Uint16(request[i+8 : i+10])
 	rr.Rdata = request[i+10 : i+10+int(rdlength)]
 
-	return &rr, i + 10 + int(rdlength), nil
+	if rr.Type == NS || rr.Type == CNAME {
+		rr.DomainTarget, i, err = parseName(request, i+10)
+		if err != nil {
+			return nil, 0, fmt.Errorf("Couldn't parse CNAME or NS domain target: %w", err)
+		}
+	} else if rr.Type == A {
+		rr.IPTarget = net.IPv4(rr.Rdata[0], rr.Rdata[1], rr.Rdata[2], rr.Rdata[3])
+		i += 10 + int(rdlength)
+	} else {
+		i += 10 + int(rdlength)
+	}
+
+	return &rr, i, nil
 }
 
 func parse(request []byte) (*DNSMessage, error) {
