@@ -10,7 +10,7 @@
       "request": "launch",
       "mode": "auto",
       "program": "${fileDirname}",
-      "args": ["-interface", "server", "-resolver", "forward", "--ip", "1.1.1.1"]
+      "args": ["-interface", "server", "-resolver", "recursive"]
     }
   ]
 }

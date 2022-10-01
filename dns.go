@@ -69,7 +69,9 @@ func main() {
 
 	switch resolverType {
 	case "forward":
-		resolver = resolvers.NewForwardResolver(net.ParseIP(resolverIP), 53)
+		resolver = resolvers.NewForwardResolver(net.ParseIP(resolverIP))
+	case "recursive":
+		resolver = resolvers.NewRecursiveResolver()
 	case "static":
 		resolver = resolvers.NewStaticResolver([]*proto.ResourceRecord{
 			{Name: []string{"test", "example", "com"}, Type: proto.CNAME, Class: proto.IN, Ttl: 600, Rdata: proto.DumpName([]string{"test", "example", "com"})},
